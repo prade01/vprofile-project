@@ -5,7 +5,6 @@
 - MySQL 8
 
 # Technologies 
-- JAKARTA
 - Spring MVC
 - Spring Security
 - Spring Data JPA
