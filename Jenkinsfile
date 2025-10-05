@@ -1,121 +1,127 @@
 pipeline {
+    agent any
     
-	agent any
-/*	
-	tools {
-        maven "maven3"
+    tools {
+        maven 'maven3'
+        dockerTool 'docker'
     }
-*/	
+    
     environment {
-        NEXUS_VERSION = "nexus3"
-        NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "172.31.40.209:8081"
-        NEXUS_REPOSITORY = "vprofile-release"
-	NEXUS_REPO_ID    = "vprofile-release"
-        NEXUS_CREDENTIAL_ID = "nexuslogin"
-        ARTVERSION = "${env.BUILD_ID}"
+        DOCKER_REGISTRY = credentials('docker-registry')
+        IMAGE_NAME = "${DOCKER_REGISTRY}/vprofile"
+        SONAR_LOGIN = credentials('sonar-token')
+        SONAR_HOST = 'https://sonarcloud.io'
+        SONAR_PROJECT = credentials('sonar-project')
+        SONAR_ORG = credentials('sonar-org')
+        CHARTS_REPO = credentials('charts-repo-url')
+        CHARTS_TOKEN = credentials('charts-repo-token')
     }
-	
-    stages{
+    
+    stages {
+        stage('Debug Variables') {
+            steps {
+                echo "=== DEBUG VARIABLES ==="
+                echo "IMAGE_NAME=${IMAGE_NAME}"
+                echo "BUILD_ID=${BUILD_ID}"
+                echo "GIT_COMMIT=${GIT_COMMIT}"
+                echo "========================"
+            }
+        }
         
-        stage('BUILD'){
+        stage('Build') {
+            when {
+                not { branch 'main' }
+            }
             steps {
                 sh 'mvn clean install -DskipTests'
             }
             post {
                 success {
-                    echo 'Now Archiving...'
                     archiveArtifacts artifacts: '**/target/*.war'
                 }
             }
         }
-
-	stage('UNIT TEST'){
+        
+        stage('Unit Test') {
+            when {
+                not { branch 'main' }
+            }
             steps {
                 sh 'mvn test'
             }
-        }
-
-	stage('INTEGRATION TEST'){
-            steps {
-                sh 'mvn verify -DskipUnitTests'
-            }
-        }
-		
-        stage ('CODE ANALYSIS WITH CHECKSTYLE'){
-            steps {
-                sh 'mvn checkstyle:checkstyle'
-            }
             post {
-                success {
-                    echo 'Generated Analysis Result'
+                always {
+                    publishTestResults testResultsPattern: 'target/surefire-reports/TEST-*.xml'
                 }
             }
         }
-
-        stage('CODE ANALYSIS with SONARQUBE') {
-          
-		  environment {
-             scannerHome = tool 'sonarscanner4'
-          }
-
-          steps {
-            withSonarQubeEnv('sonar-pro') {
-               sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
-                   -Dsonar.projectName=vprofile-repo \
-                   -Dsonar.projectVersion=1.0 \
-                   -Dsonar.sources=src/ \
-                   -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-                   -Dsonar.junit.reportsPath=target/surefire-reports/ \
-                   -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                   -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+        
+        stage('Checkstyle') {
+            when {
+                not { branch 'main' }
             }
-
-            timeout(time: 10, unit: 'MINUTES') {
-               waitForQualityGate abortPipeline: true
+            steps {
+                sh 'mvn checkstyle:checkstyle'
             }
-          }
         }
-
-        stage("Publish to Nexus Repository Manager") {
+        
+        stage('Docker Build & Push') {
+            when {
+                not { branch 'main' }
+            }
             steps {
                 script {
-                    pom = readMavenPom file: "pom.xml";
-                    filesByGlob = findFiles(glob: "target/*.${pom.packaging}");
-                    echo "${filesByGlob[0].name} ${filesByGlob[0].path} ${filesByGlob[0].directory} ${filesByGlob[0].length} ${filesByGlob[0].lastModified}"
-                    artifactPath = filesByGlob[0].path;
-                    artifactExists = fileExists artifactPath;
-                    if(artifactExists) {
-                        echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version ${pom.version} ARTVERSION";
-                        nexusArtifactUploader(
-                            nexusVersion: NEXUS_VERSION,
-                            protocol: NEXUS_PROTOCOL,
-                            nexusUrl: NEXUS_URL,
-                            groupId: pom.groupId,
-                            version: ARTVERSION,
-                            repository: NEXUS_REPOSITORY,
-                            credentialsId: NEXUS_CREDENTIAL_ID,
-                            artifacts: [
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: artifactPath,
-                                type: pom.packaging],
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: "pom.xml",
-                                type: "pom"]
-                            ]
-                        );
-                    } 
-		    else {
-                        error "*** File: ${artifactPath}, could not be found";
+                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-registry') {
+                        def image = docker.build("${IMAGE_NAME}:${GIT_COMMIT}", "-f Docker-files/app/multistage/Dockerfile .")
+                        image.push()
+                        sh "docker rmi ${IMAGE_NAME}:${GIT_COMMIT} || true"
                     }
                 }
             }
         }
-
-
+        
+        stage('SonarCloud Analysis') {
+            when {
+                not { branch 'main' }
+            }
+            steps {
+                withSonarQubeEnv('sonarcloud') {
+                    sh '''
+                        sonar-scanner \\
+                        -Dsonar.login=${SONAR_LOGIN} \\
+                        -Dsonar.host.url=${SONAR_HOST} \\
+                        -Dsonar.projectKey=${SONAR_PROJECT} \\
+                        -Dsonar.organization=${SONAR_ORG} \\
+                        -Dsonar.projectName=vprofile-repo \\
+                        -Dsonar.projectVersion=1.0 \\
+                        -Dsonar.sources=src/ \\
+                        -Dsonar.java.binaries=target/classes/com/visualpathit/account/controller/ \\
+                        -Dsonar.junit.reportsPath=target/surefire-reports/ \\
+                        -Dsonar.jacoco.reportsPath=target/jacoco.exec \\
+                        -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+                    '''
+                }
+            }
+        }
+        
+        stage('Update Deployment') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    sh '''
+                        git config --global user.email "jenkins@example.com"
+                        git config --global user.name "Jenkins CI"
+                        git clone https://${CHARTS_TOKEN}@${CHARTS_REPO} charts-repo
+                        cd charts-repo
+                        sed -i "s|image:.*|image: ${IMAGE_NAME}:${GIT_COMMIT}|" vprofile-charts/values.yaml
+                        git add vprofile-charts/values.yaml
+                        git commit -m "Update image to ${GIT_COMMIT}"
+                        git push origin main
+                    '''
+                }
+            }
+        }
     }
-
-
 }
