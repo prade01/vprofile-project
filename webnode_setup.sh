@@ -10,7 +10,7 @@
 #   5. Alloy (for metrics & logs collection)
 #   6. Final Summary
 #
-#  Author: HKH Admin
+#  Author: Pradeep Sharma
 #  Version: 2.0
 #  Tested on: Ubuntu 22.04 LTS
 #=============================================================
@@ -98,7 +98,7 @@ sudo apt install -y python3 python3-venv
 mkdir -p /tmp/project
 cd /tmp/project
 echo "Cloning vprofile-project repository..."
-git clone https://github.com/hkhcoder/vprofile-project.git
+git clone https://github.com/prade01/vprofile-project.git
 cd vprofile-project/
 git checkout monitoring
 
