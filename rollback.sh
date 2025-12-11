@@ -38,7 +38,7 @@ HTTPS_LB="vprofile-https-lb"
 PRIVATE_ZONE="vprofile-private"
 
 SUBDOMAIN="vprogcp"
-DOMAIN="hkhinfotek.xyz"
+DOMAIN="shrutideep.xyz"
 
 echo "Setting project..."
 gcloud config set project "$PROJECT_ID" --quiet
