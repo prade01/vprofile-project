@@ -14,7 +14,7 @@ ZONE="${REGION}-a"                     # Zone (derived from region)
 
 APP_NAME="vprofile"                    # Application name
 DOMAIN="<YourDomainName>"              # Your real domain for SSL
-SUBDOMAIN="vprogcp"                    # Final public URL: vprogcp.hkhinfotek.xyz
+SUBDOMAIN="vprogcp"                    # Final public URL: vprogcp.shrutideep.xyz
 
 MY_IP="0.0.0.0/0"                      # Auto-detect current public IP for bastion access
 SSH_KEY="<EnterYourSSHPublicKey>"      # Your SSH public key for bastion access
