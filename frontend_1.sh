@@ -198,7 +198,7 @@ cp -r apache-maven-3.9.9 /usr/local/maven3.9
 
 export MAVEN_OPTS="-Xmx512m"
 
-git clone -b gcp https://github.com/hkhcoder/vprofile-project.git
+git clone -b gcp https://github.com/prade01/vprofile-project.git
 cd vprofile-project
 /usr/local/maven3.9/bin/mvn install
 
